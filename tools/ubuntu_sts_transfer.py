@@ -28,16 +28,17 @@ from pysts.hyperparam import hash_params
 
 import pysts.kerasts.blocks as B
 from pysts.kerasts.callbacks import AnsSelCB
-from pysts.kerasts.objectives import ranknet, ranksvm, cicerons_1504
+from pysts.kerasts.objectives import pearsonobj
 
+import anssel_train
+import sts_train
 import anssel_train
 import models  # importlib python3 compatibility requirement
 
 
 # XXX: Not the ubuntu_train default, obviously; but allows for fast training
 # of big models.
-s0pad = 80
-s1pad = 80
+spad = 80
 
 
 def config(module_config, params):
@@ -52,11 +53,9 @@ def config(module_config, params):
     c['Ddim'] = 1
 
     c['opt'] = 'adam'
-    c['loss'] = ranknet  # XXX: binary_crossentropy back?
-    c['balance_class'] = True  # seems essential
+    c['loss'] = pearsonobj
     c['batch_size'] = 64
     c['nb_epoch'] = 16
-    c['epoch_fract'] = 1/4  # XXX: or much smaller?
 
     c['fix_layers'] = []
 
@@ -71,34 +70,40 @@ def config(module_config, params):
 
 
 def transfer_eval(runid, weightsf, module_prep_model, c, glove, vocab, gr, grv):
+    # We construct both original and sts model, then copy over
+    # the weights from the original model
     print('Model')
-    model = anssel_train.build_model(glove, vocab, module_prep_model, c, s0pad=s0pad, s1pad=s1pad, optimizer=c['opt'], fix_layers=c['fix_layers'])
+    umodel = anssel_train.build_model(glove, vocab, module_prep_model, c, s0pad=spad, s1pad=spad, do_compile=False)
+    model = sts_train.build_model(glove, vocab, module_prep_model, c, spad=spad, optimizer=c['opt'], fix_layers=c['fix_layers'])
     print('Model (weights)')
-    model.load_weights(weightsf)
-    ev.eval_anssel(model.predict(grv)['score'][:,0], grv['si0'], grv['score'], 'anssel Val (bef. train)')
+    umodel.load_weights(weightsf)
+    for n in umodel.nodes.keys():
+        model.nodes[n].set_weights(umodel.nodes[n].get_weights())
+    ev.eval_sts(model.predict(grv)['classes'][:,0], grv['classes'], 'sts Val (bef. train)')
 
     print('Training')
-    if c.get('balance_class', False):
-        one_ratio = np.sum(gr['score'] == 1) / len(gr['score'])
-        class_weight = {'score': {0: one_ratio, 1: 0.5}}
-    else:
-        class_weight = {}
     model.fit(gr, validation_data=grv,
-              callbacks=[AnsSelCB(s0v, grv),
-                         ModelCheckpoint('weights-'+runid+'-bestval.h5', save_best_only=True, monitor='mrr', mode='max'),
-                         EarlyStopping(monitor='mrr', mode='max', patience=4)],
-              class_weight=class_weight,
-              batch_size=conf['batch_size'], nb_epoch=conf['nb_epoch'], samples_per_epoch=int(len(gr['score'])*conf['epoch_fract']))
-    model.save_weights('weights-'+runid+'-final.h5', overwrite=True)
+              callbacks=[STSPearsonCB(gr, grv),
+                         ModelCheckpoint('sts-weights-'+runid+'-bestval.h5', save_best_only=True),
+                         EarlyStopping(patience=4)],
+              batch_size=conf['batch_size'], nb_epoch=conf['nb_epoch'])
+    model.save_weights('sts-weights-'+runid+'-final.h5', overwrite=True)
 
     print('Predict&Eval (best epoch)')
-    model.load_weights('weights-'+runid+'-bestval.h5')
-    ev.eval_anssel(model.predict(grv)['score'][:,0], grv['si0'], grv['score'], 'anssel Val')
+    model.load_weights('sts-weights-'+runid+'-bestval.h5')
+    ev.eval_sts(model.predict(grv)['classes'][:,0], grv['classes'], 'sts Val')
 
 
 if __name__ == "__main__":
-    modelname, weightsf, vocabf, trainf, valf = sys.argv[1:6]
-    params = sys.argv[6:]
+    modelname, weightsf, vocabf = sys.argv[1:4]
+    g = ([], [], [])
+    g_i = 0
+    for p in sys.argv[4:]:
+        if p == '--':
+            g_i += 1
+            continue
+        g[g_i].append(p)
+    (trainf, valf, params) = g
 
     module = importlib.import_module('.'+modelname, 'models')
     conf, ps, h = config(module.config, params)
@@ -112,11 +117,11 @@ if __name__ == "__main__":
     print('Dataset (vocab)')
     vocab = pickle.load(open(vocabf, "rb"))  # use plain pickle because unicode
 
-    print('Dataset (anssel train)')
-    s0, s1, y, _, gr_ = anssel_train.load_set(trainf, vocab, s0pad=s0pad, s1pad=s1pad)
+    print('Dataset (sts train)')
+    s0, s1, y, _, gr_ = sts_train.load_set(trainf, vocab, spad=spad)
     gr = loader.graph_adapt_ubuntu(gr_, vocab)
-    print('Dataset (anssel val)')
-    s0v, s1v, yv, _, grv_ = anssel_train.load_set(valf, vocab, s0pad=s0pad, s1pad=s1pad)
+    print('Dataset (sts val)')
+    s0v, s1v, yv, _, grv_ = sts_train.load_set(valf, vocab, spad=spad)
     grv = loader.graph_adapt_ubuntu(grv_, vocab)
 
     transfer_eval(runid, weightsf, module.prep_model, conf, glove, vocab, gr, grv)

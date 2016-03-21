@@ -30,14 +30,13 @@ import pysts.kerasts.blocks as B
 from pysts.kerasts.callbacks import AnsSelCB
 from pysts.kerasts.objectives import ranknet, ranksvm, cicerons_1504
 
-import anssel_train
+import para_train
 import models  # importlib python3 compatibility requirement
 
 
 # XXX: Not the ubuntu_train default, obviously; but allows for fast training
 # of big models.
-s0pad = 80
-s1pad = 80
+spad = 80
 
 
 def config(module_config, params):
@@ -52,7 +51,7 @@ def config(module_config, params):
     c['Ddim'] = 1
 
     c['opt'] = 'adam'
-    c['loss'] = ranknet  # XXX: binary_crossentropy back?
+    c['loss'] = 'binary_crossentropy'
     c['balance_class'] = True  # seems essential
     c['batch_size'] = 64
     c['nb_epoch'] = 16
@@ -72,10 +71,10 @@ def config(module_config, params):
 
 def transfer_eval(runid, weightsf, module_prep_model, c, glove, vocab, gr, grv):
     print('Model')
-    model = anssel_train.build_model(glove, vocab, module_prep_model, c, s0pad=s0pad, s1pad=s1pad, optimizer=c['opt'], fix_layers=c['fix_layers'])
+    model = para_train.build_model(glove, vocab, module_prep_model, c, spad=spad, optimizer=c['opt'], fix_layers=c['fix_layers'])
     print('Model (weights)')
     model.load_weights(weightsf)
-    ev.eval_anssel(model.predict(grv)['score'][:,0], grv['si0'], grv['score'], 'anssel Val (bef. train)')
+    ev.eval_para(model.predict(grv)['score'][:,0], grv['score'], 'para Val (bef. train)')
 
     print('Training')
     if c.get('balance_class', False):
@@ -84,16 +83,15 @@ def transfer_eval(runid, weightsf, module_prep_model, c, glove, vocab, gr, grv):
     else:
         class_weight = {}
     model.fit(gr, validation_data=grv,
-              callbacks=[AnsSelCB(s0v, grv),
-                         ModelCheckpoint('weights-'+runid+'-bestval.h5', save_best_only=True, monitor='mrr', mode='max'),
-                         EarlyStopping(monitor='mrr', mode='max', patience=4)],
+              callbacks=[ModelCheckpoint('para-weights-'+runid+'-bestval.h5', save_best_only=True),
+                         EarlyStopping(patience=4)],
               class_weight=class_weight,
               batch_size=conf['batch_size'], nb_epoch=conf['nb_epoch'], samples_per_epoch=int(len(gr['score'])*conf['epoch_fract']))
-    model.save_weights('weights-'+runid+'-final.h5', overwrite=True)
+    model.save_weights('para-weights-'+runid+'-final.h5', overwrite=True)
 
     print('Predict&Eval (best epoch)')
-    model.load_weights('weights-'+runid+'-bestval.h5')
-    ev.eval_anssel(model.predict(grv)['score'][:,0], grv['si0'], grv['score'], 'anssel Val')
+    model.load_weights('para-weights-'+runid+'-bestval.h5')
+    ev.eval_para(model.predict(grv)['score'][:,0], grv['score'], 'para Val')
 
 
 if __name__ == "__main__":
@@ -113,10 +111,10 @@ if __name__ == "__main__":
     vocab = pickle.load(open(vocabf, "rb"))  # use plain pickle because unicode
 
     print('Dataset (anssel train)')
-    s0, s1, y, _, gr_ = anssel_train.load_set(trainf, vocab, s0pad=s0pad, s1pad=s1pad)
+    s0, s1, y, _, gr_ = para_train.load_set(trainf, vocab, spad=spad)
     gr = loader.graph_adapt_ubuntu(gr_, vocab)
     print('Dataset (anssel val)')
-    s0v, s1v, yv, _, grv_ = anssel_train.load_set(valf, vocab, s0pad=s0pad, s1pad=s1pad)
+    s0v, s1v, yv, _, grv_ = para_train.load_set(valf, vocab, spad=spad)
     grv = loader.graph_adapt_ubuntu(grv_, vocab)
 
     transfer_eval(runid, weightsf, module.prep_model, conf, glove, vocab, gr, grv)
