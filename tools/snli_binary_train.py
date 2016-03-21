@@ -25,6 +25,7 @@ from keras.layers.recurrent import SimpleRNN, GRU, LSTM
 from keras.models import Graph
 import numpy as np
 
+import pickle
 import pysts.embedding as emb
 import pysts.eval as ev
 import pysts.loader as loader
@@ -42,10 +43,10 @@ import models  # importlib python3 compatibility requirement
 spad = 60
 
 
-def load_set(fname, vocab=None, spad=spad):
-    si0, si1, f0, f1, y = loader.load_snli_bin(fname)
+def load_set(fname, vocab):
+    si0, si1, f0, f1, y = loader.load_snli_bin(fname, vocab)
     gr = graph_input_anssel(si0, si1, y, f0, f1, s0, s1)
-    return (s0, s1, y, vocab, gr)
+    return (s0, s1, y, gr)
 
 
 def config(module_config, params):
@@ -134,7 +135,7 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
 
 
 if __name__ == "__main__":
-    modelname, trainf, valf = sys.argv[1:4]
+    modelname, vocabf, trainf, valf = sys.argv[1:5]
     params = sys.argv[4:]
 
     module = importlib.import_module('.'+modelname, 'models')
@@ -149,8 +150,11 @@ if __name__ == "__main__":
     else:
         glove = None
 
-    print('Dataset')
-    s0, s1, y, vocab, gr = load_set(trainf)
-    s0t, s1t, yt, _, grt = load_set(valf, vocab)
+    print('Dataset (vocab)')
+    vocab = pickle.load(open(vocabf, "rb"))  # use plain pickle because unicode
+    print('Dataset (train)')
+    s0, s1, y, gr = load_set(trainf, vocab)
+    print('Dataset (val)')
+    s0t, s1t, yt, grt = load_set(valf, vocab)
 
     train_and_eval(runid, module.prep_model, conf, glove, vocab, gr, grt)
