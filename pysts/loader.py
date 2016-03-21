@@ -170,16 +170,14 @@ def load_snli_bin(dsfile, vocab):
                 s1 = d['sentence2']
                 si0 = vocab.vectorize([s0], spad=None)
                 si1 = vocab.vectorize([s1], spad=None)
-                label = lmappings[d['gold_label']]
                 f0_, f1_ = nlp.sentence_flags([s0], [s1], len(s0), len(s1))
                 s0i.append(si0[0])
                 s1i.append(si1[0])
                 f0.append(f0_[0])
                 f1.append(f1_[0])
-                labels.append(lmappings(label))
+                labels.append(lmappings[label])
             else:
                 neutral_skips+=1
-
             i += 1
     return (s0i, s1i, f0, f1, np.array(labels))
 

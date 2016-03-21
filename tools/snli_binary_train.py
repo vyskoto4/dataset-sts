@@ -45,8 +45,8 @@ spad = 60
 
 def load_set(fname, vocab):
     si0, si1, f0, f1, y = loader.load_snli_bin(fname, vocab)
-    gr = graph_input_anssel(si0, si1, y, f0, f1, s0, s1)
-    return (s0, s1, y, gr)
+    gr = graph_input_anssel(si0, si1, y, f0, f1)
+    return (si0, si1, y, gr)
 
 
 def config(module_config, params):
