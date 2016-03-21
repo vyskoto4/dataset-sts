@@ -2,6 +2,7 @@ import json
 import pickle
 import sys
 from pysts.vocab import Vocabulary
+from nltk.tokenize import word_tokenize
 
 
 def sentence_gen(dsfiles):
@@ -11,8 +12,8 @@ def sentence_gen(dsfiles):
         with open(fname) as f:
             for l in f:
                 d=json.loads(l)
-                yield d['sentence1'].split(' ')
-                yield d['sentence2'].split(' ')
+                yield word_tokenize(d['sentence1'])
+                yield word_tokenize(d['sentence2'])
                 i += 1
 
 if __name__ == "__main__":
