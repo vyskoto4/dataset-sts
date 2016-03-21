@@ -12,8 +12,12 @@ from __future__ import print_function
 
 import codecs
 import csv
+import json
+
 from nltk.tokenize import word_tokenize
 import numpy as np
+import pysts.nlp as nlp
+
 
 
 def load_anssel(dsfile, subsample0=1, skip_oneclass=True):
@@ -142,26 +146,43 @@ def load_sick2014(dsfile, mode='relatedness'):
             s1.append(word_tokenize(sentence_B))
     return (s0, s1, np.array(labels))
 
-
-def load_sts(dsfile, skip_unlabeled=True):
-    """ load a dataset in the sts tsv format """
-    s0 = []
-    s1 = []
+def load_snli_bin(dsfile, vocab):
+    s0i = []
+    s1i = []
+    f0=[]
+    f1=[]
     labels = []
-    with codecs.open(dsfile, encoding='utf8') as f:
-        for line in f:
-            line = line.rstrip()
-            label, s0x, s1x = line.split('\t')
-            if label == '':
-                if skip_unlabeled:
-                    continue
-                else:
-                    labels.append(-1.)
+    lmappings={'contradiction': int(0), 'entailment': int(1)}
+    i = 0
+    skips=0
+    neutral_skips=0
+    with open(dsfile) as f:
+        for l in f:
+            d=json.loads(l)
+            if i % 10000 == 0:
+                print('%d samples read, %d no label skips, %d neutral label skips' % (i,skips, neutral_skips))
+            if len(d['gold_label'])<2: # some pairs are not labeled, skip them
+                skips += 1
+                continue
+            label = d['gold_label']
+            if label in lmappings:
+                s0 = d['sentence1']
+                s1 = d['sentence2']
+                si0 = vocab.vectorize([s0], spad=None)
+                si1 = vocab.vectorize([s1], spad=None)
+                label = lmappings[d['gold_label']]
+                f0_, f1_ = nlp.sentence_flags([s0], [s1], len(s0), len(s1))
+                s0i.append(si0[0])
+                s1i.append(si1[0])
+                f0.append(f0_[0])
+                f1.append(f1_[0])
+                labels.append(lmappings(label))
             else:
-                labels.append(float(label))
-            s0.append(word_tokenize(s0x))
-            s1.append(word_tokenize(s1x))
-    return (s0, s1, np.array(labels))
+                neutral_skips+=1
+
+            i += 1
+    return (s0i, s1i, f0, f1, np.array(labels))
+
 
 
 def load_msrpara(dsfile):

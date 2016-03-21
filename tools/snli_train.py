@@ -51,10 +51,12 @@ import random
 import sys
 
 from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.layers.core import Activation, Dropout
+from keras.layers.core import Activation, Dense, Dropout
 from keras.layers.recurrent import SimpleRNN, GRU, LSTM
 from keras.models import Graph
 from keras.preprocessing.sequence import pad_sequences
+from keras.regularizers import l2
+
 
 import pysts.embedding as emb
 import pysts.eval as ev
@@ -78,21 +80,8 @@ s0pad = 160
 s1pad = 160
 
 
-def pad_3d_sequence(seqs, maxlen, nd, dtype='int32'):
-    pseqs = np.zeros((len(seqs), maxlen, nd)).astype(dtype)
-    for i, seq in enumerate(seqs):
-        trunc = np.array(seq[-maxlen:], dtype=dtype)  # trunacting='pre'
-        pseqs[i, :trunc.shape[0]] = trunc  # padding='post'
-    return pseqs
 
 
-def pad_graph(gr, s0pad=s0pad, s1pad=s1pad):
-    """ pad sequences in the graph """
-    gr['si0'] = pad_sequences(gr['si0'], maxlen=s0pad, truncating='pre', padding='post')
-    gr['si1'] = pad_sequences(gr['si1'], maxlen=s1pad, truncating='pre', padding='post')
-    gr['f0'] = pad_3d_sequence(gr['f0'], maxlen=s0pad, nd=nlp.flagsdim)
-    gr['f1'] = pad_3d_sequence(gr['f1'], maxlen=s1pad, nd=nlp.flagsdim)
-    gr['score'] = np.array(gr['score'])
 
 
 def load_set(fname, vocab):
@@ -101,20 +90,21 @@ def load_set(fname, vocab):
     return gr
 
 
+
 def config(module_config, params):
     c = dict()
     c['embdim'] = 300
-    c['inp_e_dropout'] = 1/2
+    c['inp_e_dropout'] = 3/4
+    c['inp_w_dropout'] = 0
     c['e_add_flags'] = True
 
-    c['ptscorer'] = B.mlp_ptscorer
+    c['ptscorer'] = B.dot_ptscorer
     c['mlpsum'] = 'sum'
-    c['Ddim'] = 1
+    c['Ddim'] = 2
 
-    c['loss'] = 'categorical_crossentropy'
-    c['batch_size'] = 192
-    c['nb_epoch'] = 16
-    c['epoch_fract'] = 1/4
+    c['loss'] ='categorical_crossentropy'
+    c['batch_size'] = 160
+    c['nb_epoch'] = 32
     module_config(c)
 
     for p in params:
@@ -125,22 +115,6 @@ def config(module_config, params):
     return c, ps, h
 
 
-def sample_pairs(gr, c, batch_size, once=False):
-    """ A generator that produces random pairs from the dataset """
-    # XXX: We drop the last few samples if (1e6 % batch_size != 0)
-    # XXX: We never swap samples between batches, does it matter?
-    ids = range(int(len(gr['si0']) / batch_size))
-    while True:
-        random.shuffle(ids)
-        for i in ids:
-            sl = slice(i * batch_size, (i+1) * batch_size)
-            ogr = graph_input_slice(gr, sl)
-            # TODO: Add support for discarding too long samples?
-            pad_graph(ogr)
-            yield ogr
-        if once:
-            break
-
 def prep_model(glove, vocab, module_prep_model, c, oact, s0pad, s1pad):
     # Input embedding and encoding
     model = Graph()
@@ -150,25 +124,17 @@ def prep_model(glove, vocab, module_prep_model, c, oact, s0pad, s1pad):
     final_outputs = module_prep_model(model, N, s0pad, s1pad, c)
 
     # Measurement
-
-    if c['ptscorer'] == '1':
-        # special scoring mode just based on the answer
-        # (assuming that the question match is carried over to the answer
-        # via attention or another mechanism)x
-        ptscorer = B.cat_ptscorer
-        final_outputs = final_outputs[1]
-    else:
-        ptscorer = c['ptscorer']
-
     kwargs = dict()
-    if ptscorer == B.mlp_ptscorer:
+    if c['ptscorer'] == B.mlp_ptscorer:
         kwargs['sum_mode'] = c['mlpsum']
+    model.add_node(name='scoreS', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'], **kwargs),
+                   layer=Activation('linear'))
+    model.add_node(name='out', input='scoreS',
+                   layer=Dense(3, W_regularizer=l2(c['l2reg'])))
+    model.add_node(name='outS', input='out',
+                   layer=Activation('softmax'))
 
-        # tady vymenit
-    model.add_node(name='scoreS', input=ptscorer(model, final_outputs, c['Ddim'], N, c['l2reg'], **kwargs),
-                   layer=Activation(oact))
-    model.add_output(name='score', input='scoreS')
-    return model
+    model.add_output(name='classes', input='outS')
 
 
 def build_model(glove, vocab, module_prep_model, c, s0pad=s0pad, s1pad=s1pad, optimizer='adam'):
@@ -192,17 +158,12 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, s0, grt, s0t, 
     model = build_model(glove, vocab, module_prep_model, c, s0pad=s0pad, s1pad=s1pad)
 
     print('Training')
-    if c.get('balance_class', False):
-        one_ratio = np.sum(gr['score'] == 1) / len(gr['score'])
-        class_weight = {'score': {0: one_ratio, 1: 0.5}}
-    else:
-        class_weight = {}
+
     # XXX: samples_per_epoch is in brmson/keras fork, TODO fit_generator()?
     model.fit(gr, validation_data=grt,
               callbacks=[AnsSelCB(s0t, grt),
                          ModelCheckpoint('weights-'+runid+'-bestval.h5', save_best_only=True, monitor='mrr', mode='max'),
                          EarlyStopping(monitor='mrr', mode='max', patience=4)],
-              class_weight=class_weight,
               batch_size=c['batch_size'], nb_epoch=c['nb_epoch'], samples_per_epoch=int(len(s0)*c['epoch_fract']))
     model.save_weights('weights-'+runid+'-final.h5', overwrite=True)
     if c['ptscorer'] is None:
@@ -215,25 +176,6 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, s0, grt, s0t, 
         ev.eval_anssel(model.predict(grt)['score'][:,0], s0t, grt['score'], 'Val')
     return model
 
-
-
-def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt):
-    print('Model')
-    model = anssel_train.build_model(glove, vocab, module_prep_model, c, s0pad=s0pad, s1pad=s1pad)
-
-    print('Training')
-    model.fit_generator(sample_pairs(gr, c, c['batch_size']),
-                        callbacks=[#ValSampleCB(grt, c),  # loss function & ubuntu metrics
-                                   AnsSelCB(grt['si0'], grt),  # MRR
-                                   ModelCheckpoint('snli-weights-'+runid+'-bestval.h5', save_best_only=True, monitor='mrr', mode='max'),
-                                   EarlyStopping(monitor='mrr', mode='max', patience=6)],
-                        nb_epoch=32, samples_per_epoch=200000)
-    model.save_weights('snli-weights-'+runid+'-final.h5', overwrite=True)
-
-    print('Predict&Eval (best epoch)')
-    model.load_weights('snli-weights-'+runid+'-bestval.h5')
-    ypredt = model.predict(grt)['score'][:,0]
-    ev.eval_ubuntu(ypredt, grt['si0'], grt['score'], 'Val')
 
 
 if __name__ == "__main__":
@@ -256,7 +198,7 @@ if __name__ == "__main__":
     print('Dataset (val)')
     grt = load_set(valf, vocab)
     print('Padding (val)')
-    pad_graph(grt)
+    #pad_graph(grt)
 
     train_and_eval(runid, module.prep_model, conf, glove, vocab, gr, grt)
 
@@ -275,4 +217,4 @@ pickle.dump(vocab, open(vocabf, "wb"))
 
 #s0i, s1i, labels = load_set(dataf, vocab)
 glove = emb.GloVe(N=conf['embdim'])
-''
+'''
