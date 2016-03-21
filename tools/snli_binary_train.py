@@ -136,7 +136,10 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
 
 if __name__ == "__main__":
     modelname, vocabf, trainf, valf = sys.argv[1:5]
-    params = sys.argv[4:]
+    params = sys.argv[5:]
+    print("modelname, vocabf, trainf, valf  %s" %(str([modelname,vocabf, trainf, valf])))
+    print("params %s" %(str(params)))
+
 
     module = importlib.import_module('.'+modelname, 'models')
     conf, ps, h = config(module.config, params)
