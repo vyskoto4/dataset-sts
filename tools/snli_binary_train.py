@@ -67,6 +67,7 @@ def config(module_config, params):
     module_config(c)
 
     for p in params:
+	print(p)
         k, v = p.split('=')
         c[k] = eval(v)
 
@@ -120,7 +121,6 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
     model.fit(gr, validation_data=grt,  # show_accuracy=True,
               callbacks=[ModelCheckpoint('snli-weights-'+runid+'-bestval.h5', save_best_only=True),
                          EarlyStopping(patience=3)],
-              class_weight=class_weight,
               batch_size=c['batch_size'], nb_epoch=c['nb_epoch'])
     model.save_weights('snli-weights-'+runid+'-final.h5', overwrite=True)
     if c['ptscorer'] is None:
@@ -136,7 +136,8 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
 
 if __name__ == "__main__":
     modelname, vocabf, trainf, valf = sys.argv[1:5]
-    params = sys.argv[4:]
+    print("Modelname: %s, Vocabulary file: %s, Training file: %s, Evaluation file %s" %(modelname, vocabf, trainf, valf))
+    params = sys.argv[5:]
 
     module = importlib.import_module('.'+modelname, 'models')
     conf, ps, h = config(module.config, params)

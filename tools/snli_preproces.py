@@ -17,6 +17,6 @@ def sentence_gen(dsfiles):
                 i += 1
 
 if __name__ == "__main__":
-    testset, valset, vocabf = sys.argv[1:3]
+    testset, valset, vocabf = sys.argv[1:4]
     vocab = Vocabulary(sentence_gen([testset,valset]), count_thres=2)
     pickle.dump(vocab, open(vocabf, "wb"))
