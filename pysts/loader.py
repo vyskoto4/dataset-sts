@@ -152,7 +152,7 @@ def load_snli_bin(dsfile, vocab):
     f0=[]
     f1=[]
     labels = []
-    lmappings={'contradiction': int(0), 'entailment': int(1)}
+    lmappings={'contradiction': float(0), 'entailment': float(1)}
     i = 0
     skips=0
     neutral_skips=0
@@ -166,10 +166,10 @@ def load_snli_bin(dsfile, vocab):
                 continue
             label = d['gold_label']
             if label in lmappings:
-                s0 = d['sentence1']
-                s1 = d['sentence2']
-                si0 = vocab.vectorize(word_tokenize(s0), spad=None)
-                si1 = vocab.vectorize(word_tokenize(s1), spad=None)
+                s0 = word_tokenize(d['sentence1'])
+                s1 = word_tokenize(d['sentence2'])
+                si0 = vocab.vectorize([s0], spad=60)
+                si1 = vocab.vectorize([s1], spad=60)
                 f0_, f1_ = nlp.sentence_flags([s0], [s1], len(s0), len(s1))
                 s0i.append(si0[0])
                 s1i.append(si1[0])
