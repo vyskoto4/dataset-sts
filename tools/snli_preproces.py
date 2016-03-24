@@ -26,14 +26,20 @@ def build_subset(input,output,sample_inds):
     for line in open(input):
         if linenum in sample_inds:
             outputf.write(line)
+        if linenum%5000==0:
+            print("%d lines processed" %(linenum))
+        linenum+=1
     outputf.close()
 
 def extract_subset(trainf, testf,fraction,train_out,test_out):
     # prepare train data subset
+    fraction=float(fraction)
+    print('Preparing train subset')
     samplenum=np.ceil(fraction*TRAIN_LINES)
     sample_inds=set(np.random.randint(TRAIN_LINES, size=samplenum))
     build_subset(trainf, train_out, sample_inds)
     # prepare test dataset
+    print('Preparing test subset')
     samplenum=np.ceil(fraction*TEST_LINES)
     sample_inds=set(np.random.randint(TEST_LINES, size=samplenum))
     build_subset(testf, test_out, sample_inds)
