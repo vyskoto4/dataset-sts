@@ -176,6 +176,36 @@ def load_snli_bin(dsfile, vocab):
 
 
 
+def load_snli(dsfile, vocab):
+    s0i = []
+    s1i = []
+    labels = []
+    lmappings={'contradiction': np.array([1,0,0]), 'neutral':np.array([0,1,0]) , 'entailment': np.array([0,0,1])}
+    i = 0
+    skips=0
+    neutral_skips=0
+    with open(dsfile) as f:
+        for l in f:
+            d=json.loads(l)
+            if i % 5000 == 0:
+                print('%d samples read, %d no label skips, %d neutral label skips' % (i,skips, neutral_skips))
+            if len(d['gold_label'])<2: # some pairs are not labeled, skip them
+                skips += 1
+                continue
+            label = d['gold_label']
+            if label in lmappings:
+                s0 = word_tokenize(d['sentence1'])
+                s1 = word_tokenize(d['sentence2'])
+                s0i.append(s0)
+                s1i.append(s1)
+                labels.append(lmappings[label])
+            else:
+                neutral_skips+=1
+            i += 1
+    print('%s dataset file loaded. %d samples read, %d no label skips, %d neutral label skips' % (dsfile,i,skips, neutral_skips))
+    return (s0i, s1i, np.array(labels))
+
+
 def load_msrpara(dsfile):
     """ load a dataset in the msrpara tsv format """
     s0 = []
