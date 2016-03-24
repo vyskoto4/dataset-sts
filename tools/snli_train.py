@@ -89,13 +89,13 @@ def prep_model(glove, vocab, module_prep_model, c, spad=spad):
     kwargs = dict()
     if c['ptscorer'] == B.mlp_ptscorer:
         kwargs['sum_mode'] = c['mlpsum']
-    model.add_node(name='scoreS0', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'], **kwargs),
+    model.add_node(name='scoreS0', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out0", **kwargs),
                    layer=Activation('sigmoid'))
 
-    model.add_node(name='scoreS1', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'], **kwargs),
+    model.add_node(name='scoreS1', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out1", **kwargs),
                    layer=Activation('sigmoid'))
 
-    model.add_node(name='scoreS2', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'], **kwargs),
+    model.add_node(name='scoreS2', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out2", **kwargs),
                    layer=Activation('sigmoid'))
 
     model.add_node(name='scoreV', inputs=['scoreS0', 'scoreS1', 'scoreS2'], merge_mode='concat', layer=Activation('softmax'))
@@ -129,7 +129,7 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
     else:
         class_weight = {}
     # XXX: samples_per_epoch is in brmson/keras fork, TODO fit_generator()?
-    model.fit(gr, validation_data=grt,  # show_accuracy=True,
+    model.fit(gr, validation_data=grt,  show_accuracy=True,
               callbacks=[ModelCheckpoint('snli-weights-'+runid+'-bestval.h5', save_best_only=True),
                          EarlyStopping(patience=3)],
               batch_size=c['batch_size'], nb_epoch=c['nb_epoch'])
