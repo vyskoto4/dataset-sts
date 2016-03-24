@@ -44,10 +44,12 @@ spad = 60
 
 
 def load_set(fname, vocab):
-    si0, si1, f0, f1, y = loader.load_snli_bin(fname, vocab)
-    gr = graph_input_anssel(si0, si1, y, f0, f1)
+    s0, s1, y = loader.load_snli_bin(fname, vocab)
+    si0 = vocab.vectorize(s0, spad=spad)
+    si1 = vocab.vectorize(s1, spad=spad)
+    f0, f1 = nlp.sentence_flags(s0, s1, spad, spad)
+    gr = graph_input_anssel(si0, si1, y, f0, f1, s0, s1)
     return (si0, si1, y, gr)
-
 
 def config(module_config, params):
     c = dict()

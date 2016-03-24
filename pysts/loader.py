@@ -149,8 +149,6 @@ def load_sick2014(dsfile, mode='relatedness'):
 def load_snli_bin(dsfile, vocab):
     s0i = []
     s1i = []
-    f0=[]
-    f1=[]
     labels = []
     lmappings={'contradiction': float(0), 'entailment': float(1)}
     i = 0
@@ -168,18 +166,13 @@ def load_snli_bin(dsfile, vocab):
             if label in lmappings:
                 s0 = word_tokenize(d['sentence1'])
                 s1 = word_tokenize(d['sentence2'])
-                si0 = vocab.vectorize([s0], spad=60)
-                si1 = vocab.vectorize([s1], spad=60)
-                f0_, f1_ = nlp.sentence_flags([s0], [s1], len(s0), len(s1))
-                s0i.append(si0[0])
-                s1i.append(si1[0])
-                f0.append(f0_[0])
-                f1.append(f1_[0])
+                s0i.append(s0)
+                s1i.append(s1)
                 labels.append(lmappings[label])
             else:
                 neutral_skips+=1
             i += 1
-    return (s0i, s1i, f0, f1, np.array(labels))
+    return (s0i, s1i, np.array(labels))
 
 
 
