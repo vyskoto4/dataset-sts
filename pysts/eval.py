@@ -39,6 +39,34 @@ def binclass_accuracy(y, ypred):
 
     return (rawacc, y0acc, y1acc, balacc, f_score)
 
+def multiclass_accuracy(y, ypred):
+    """
+    Compute accuracy for multiclass classification tasks
+
+    Returns (rawacc, class_correct,class_counts, class_acc) where balacc is average of y0acc
+    and y1acc, regardless of their true balance in the dataset.
+
+    (The idea is that even if the unfortunate reality is that we have much
+    less y1 samples, their detection is equally important.)
+    """
+    result = np.zeros(ypred.shape)
+    clss=y.shape[1]
+    class_counts=np.zeros(clss)
+    class_correct=np.zeros(clss)
+    tp=0
+    for row in range(ypred.shape[0]):
+        result[row,np.argmax(ypred[row])]=1;
+        for cls in range(clss):
+            if y[row,cls]==1:
+                class_counts[cls]+=1
+                if result[row,cls]==1:
+                    class_correct[cls]+=1
+                    tp+=1
+    class_acc=np.zeros(clss)
+    for cls in range(clss):
+        class_acc=(1.0*class_correct[cls])/class_counts[cls]
+    rawacc = (tp*1.0)/y.shape[0]
+    return (rawacc, class_correct,class_counts, class_acc)
 
 def aggregate_s0(s0, y, ypred, k=None):
     """
@@ -162,6 +190,14 @@ def eval_anssel(ypred, s0, y, name):
     print('%s MRR: %f  %s' % (name, mrr_, '(on training set, y=0 may be subsampled!)' if name == 'Train' else ''))
     return mrr_
 
+def eval_snli(ypred, y, name):
+    cls_names= ['contradiction', 'neutral', 'entailment']
+    rawacc, class_correct,class_counts, class_acc = multiclass_accuracy(y, ypred)
+    print('%s Accuracy: %f \n%s count %d, accuracy %f\n%s count %d, accuracy %f\n%s count %d, accuracy %f %' (name, rawacc,
+                                                                                                              cls_names[0], class_counts[0],class_acc[0],
+                                                                                                              cls_names[1], class_counts[1],class_acc[1],
+                                                                                                              cls_names[2], class_counts[2],class_acc[2]))
+    return (rawacc)
 
 def eval_para(ypred, y, name):
     rawacc, y0acc, y1acc, balacc, f_score = binclass_accuracy(y, ypred)
