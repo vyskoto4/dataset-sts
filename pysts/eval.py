@@ -64,7 +64,7 @@ def multiclass_accuracy(y, ypred):
                     tp+=1
     class_acc=np.zeros(clss)
     for cls in range(clss):
-        class_acc=(1.0*class_correct[cls])/class_counts[cls]
+        class_acc[cls]=(1.0*class_correct[cls])/class_counts[cls]
     rawacc = (tp*1.0)/y.shape[0]
     return (rawacc, class_correct,class_counts, class_acc)
 
@@ -193,7 +193,7 @@ def eval_anssel(ypred, s0, y, name):
 def eval_snli(ypred, y, name):
     cls_names= ['contradiction', 'neutral', 'entailment']
     rawacc, class_correct,class_counts, class_acc = multiclass_accuracy(y, ypred)
-    print('%s Accuracy: %f \n%s count %d, accuracy %f\n%s count %d, accuracy %f\n%s count %d, accuracy %f %' (name, rawacc,
+    print('%s Accuracy: %f \n%s count %d, accuracy %f\n%s count %d, accuracy %f\n%s count %d, accuracy %f' %(name, rawacc,
                                                                                                               cls_names[0], class_counts[0],class_acc[0],
                                                                                                               cls_names[1], class_counts[1],class_acc[1],
                                                                                                               cls_names[2], class_counts[2],class_acc[2]))

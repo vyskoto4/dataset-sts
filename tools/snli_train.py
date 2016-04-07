@@ -129,7 +129,7 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
     else:
         class_weight = {}
     # XXX: samples_per_epoch is in brmson/keras fork, TODO fit_generator()?
-    model.fit(gr, validation_data=grt,  show_accuracy=True,
+    model.fit(gr, validation_data=grt,
               callbacks=[ModelCheckpoint('snli-weights-'+runid+'-bestval.h5', save_best_only=True),
                          EarlyStopping(patience=3)],
               batch_size=c['batch_size'], nb_epoch=c['nb_epoch'])
@@ -140,8 +140,8 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
 
     if do_eval:
         print('Predict&Eval (best val epoch)')
-        ev.eval_snli(model.predict(gr)['score'][:,0], gr['score'], 'Train')
-        ev.eval_snli(model.predict(grt)['score'][:,0], grt['score'], 'Val')
+        ev.eval_snli(model.predict(gr)['score'], gr['score'], 'Train')
+        ev.eval_snli(model.predict(grt)['score'], grt['score'], 'Val')
     return model
 
 
