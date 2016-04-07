@@ -89,13 +89,13 @@ def prep_model(glove, vocab, module_prep_model, c, spad=spad):
     kwargs = dict()
     if c['ptscorer'] == B.mlp_ptscorer:
         kwargs['sum_mode'] = c['mlpsum']
-    model.add_node(name='scoreS0', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out0", **kwargs),
+    model.add_node(name='scoreS0', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfx="out0", **kwargs),
                    layer=Activation('sigmoid'))
 
-    model.add_node(name='scoreS1', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out1", **kwargs),
+    model.add_node(name='scoreS1', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfx="out1", **kwargs),
                    layer=Activation('sigmoid'))
 
-    model.add_node(name='scoreS2', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfix="out2", **kwargs),
+    model.add_node(name='scoreS2', input=c['ptscorer'](model, final_outputs, c['Ddim'], N, c['l2reg'],pfx="out2", **kwargs),
                    layer=Activation('sigmoid'))
 
     model.add_node(name='scoreV', inputs=['scoreS0', 'scoreS1', 'scoreS2'], merge_mode='concat', layer=Activation('softmax'))
@@ -140,8 +140,8 @@ def train_and_eval(runid, module_prep_model, c, glove, vocab, gr, grt, do_eval=T
 
     if do_eval:
         print('Predict&Eval (best val epoch)')
-        ev.eval_para(model.predict(gr)['score'][:,0], gr['score'], 'Train')
-        ev.eval_para(model.predict(grt)['score'][:,0], grt['score'], 'Val')
+        ev.eval_snli(model.predict(gr)['score'][:,0], gr['score'], 'Train')
+        ev.eval_snli(model.predict(grt)['score'][:,0], grt['score'], 'Val')
     return model
 
 
