@@ -102,7 +102,7 @@ def train_model(runid, model, task, c):
 
 def train_and_eval(runid, module_prep_model, task, c, do_eval=True):
     print('Model')
-    model = task.build_model(module_prep_model)
+    model = task.build_model()
 
     train_model(runid, model, task, c)
 
