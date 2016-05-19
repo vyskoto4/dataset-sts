@@ -36,7 +36,7 @@ def config(c):
     c['sdim'] = 2
     c['rnnlevels'] = 1
 
-    c['project'] = True
+    c['project'] = False
     c['pdim'] = 2
     c['pact'] = 'tanh'
 
