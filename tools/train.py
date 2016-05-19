@@ -117,6 +117,8 @@ def train_and_eval(runid, module_prep_model, task, c, do_eval=True):
 if __name__ == "__main__":
     modelname, taskname, trainf, valf = sys.argv[1:5]
     params = sys.argv[5:]
+    if not modelname=='rnn':
+	print('Warning: Attention is supposed to be used with RNN model only')
 
     model_module = importlib.import_module('.'+modelname, 'models')
     task_module = importlib.import_module('.'+taskname, 'tasks')

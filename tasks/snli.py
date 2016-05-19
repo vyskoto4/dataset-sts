@@ -8,6 +8,9 @@ Training example:
 
 Before training, you must however run:
    tools/snli_preprocess.py data/snli/snli_1.0_train.jsonl data/snli/snli_1.0_dev.jsonl data/snli/snli_1.0_test.jsonl data/snli/snli_1.0_train.pickle  data/snli/snli_1.0_dev.pickle data/snli/snli_1.0_test.pickle data/snli/v1-vocab.pickle
+
+This is a experimental version of snli task which uses code snippets from https://github.com/shyamupa/snli-entailment/blob/master/amodel.py.
+
 """
 
 from __future__ import print_function
@@ -27,7 +30,7 @@ from keras.regularizers import l2
 from pysts.kerasts import graph_input_anssel
 import pysts.kerasts.blocks as B
 
-from keras.build.lib.keras.utils.visualize_util import plot
+
 from .anssel import AbstractTask
 
 def get_H_n(X):
@@ -36,8 +39,7 @@ def get_H_n(X):
 
 
 def get_Y(X):
-    xmaxlen=K.params['xmaxlen']
-    return X[:, :xmaxlen, :]  # get first xmaxlen elem from time dim
+    return X[:, :60, :]  # get first xmaxlen elem from time dim
 
 def get_R(X):
     Y, alpha = X.values()  # Y should be (None,L,k) and alpha should be (None,L,1) and ans should be (None, k,1)
@@ -109,7 +111,7 @@ class SnliTask(AbstractTask):
         k=N
         model.add_node(Lambda(get_H_n, output_shape=(k,)), name='h_n', input=final_outputs[0])
         
-        model.add_node(Lambda(get_Y, output_shape=(L, k)), name='Y', input=final_outputs[0])
+        model.add_node(Lambda(get_Y, output_shape=(L, k)), name='Y', input=final_outputs[1])
         model.add_node(Dense(k,W_regularizer=l2(0.01)),name='Wh_n', input='h_n')
         model.add_node(RepeatVector(L), name='Wh_n_cross_e', input='Wh_n')
         model.add_node(TimeDistributedDense(k,W_regularizer=l2(0.01)), name='WY', input='Y')
@@ -122,11 +124,9 @@ class SnliTask(AbstractTask):
         model.add_node(Activation('tanh'), name='h_star', inputs=['Wr', 'Wh'], merge_mode='sum')
 
         model.add_node(Dense(3, activation='softmax'), name='out', input='h_star')
-        model.add_output(name='output', input='out')
+        model.add_output(name='score', input='out')
         model.summary()
-        plot(model, 'model.png')
 
-        model.add_output(name='score', input='scoreV')
         return model
 
 

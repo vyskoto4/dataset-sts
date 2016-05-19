@@ -35,6 +35,7 @@ def config(c):
     c['rnninit'] = 'glorot_uniform'
     c['sdim'] = 2
     c['rnnlevels'] = 1
+    c['return_seq']=True
 
     c['project'] = False
     c['pdim'] = 2
@@ -52,7 +53,7 @@ def config(c):
 def prep_model(model, N, s0pad, s1pad, c):
     B.rnn_input(model, N, s0pad,
                 dropout=c['dropout'], dropoutfix_inp=c['dropoutfix_inp'], dropoutfix_rec=c['dropoutfix_rec'],
-                sdim=c['sdim'],
+                sdim=c['sdim'],return_sequences=c['return_seq'],
                 rnnbidi=c['rnnbidi'], rnn=c['rnn'], rnnact=c['rnnact'], rnninit=c['rnninit'],
                 rnnbidi_mode=c['rnnbidi_mode'], rnnlevels=c['rnnlevels'])
 
