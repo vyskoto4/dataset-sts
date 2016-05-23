@@ -35,8 +35,8 @@ def sentence_gen(dsfiles):
 
 def load_set(fname,vocab,glove):
     s0, s1, labels = loader.load_snli(fname, vocab)
-    si0,sj0 = vocab.vectorize(s0, glove, spad=None)
-    si1,sj1 = vocab.vectorize(s1, glove, spad=None)
+    si0,sj0 = vocab.vectorize(s0, glove, spad)
+    si1,sj1 = vocab.vectorize(s1, glove, spad)
     f0_, f1_ = nlp.sentence_flags(s0, s1, spad, spad)
     return (si0, si1, sj0, sj1, f0_, f1_, labels)
 

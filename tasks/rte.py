@@ -100,10 +100,11 @@ class RTETask(AbstractTask):
 
         if do_compile:
             model.compile(loss={'score': self.c['loss']}, optimizer=self.c['opt'])
+	model.summary()
         return model
 
     def fit_callbacks(self, weightsf):
-        return [RTECB(self.grv),
+        return [RTECB(self),
                 ModelCheckpoint(weightsf, save_best_only=True, monitor='acc', mode='max'),
                 EarlyStopping(monitor='acc', mode='max', patience=6)]
 
