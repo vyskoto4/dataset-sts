@@ -34,6 +34,8 @@ Note that NO DROPOUT is applied for any of the models.
 |                          |±0.037068 |±0.012773 |±0.008269 |
 | attn1511                 | 0.828611 | 0.781472 | 0.773921 | ``dropout=0`` ``inp_e_dropout=0``
 |                          |±0.013870 |±0.002253 |±0.004134 |
+| cnn                      | 0.837948 | 0.781701 | 0.776135 | ``inp_w_dropout=0`` ``dropout=0`` ``inp_e_dropout=0``
+|                          |±0.008889 |±0.004660 |±0.003057 |
 
 These results are obtained like this:
 
