@@ -33,10 +33,10 @@ def sentence_gen(dsfiles):
                 i += 1
 
 
-def load_set(fname,vocab,emb):
+def load_set(fname,vocab,glove):
     s0, s1, labels = loader.load_snli(fname, vocab)
-    si0,sj0 = vocab.vectorize(s0, emb, spad=None)
-    si1,sj1 = vocab.vectorize(s1, emb, spad=None)
+    si0,sj0 = vocab.vectorize(s0, glove, spad=None)
+    si1,sj1 = vocab.vectorize(s1, glove, spad=None)
     f0_, f1_ = nlp.sentence_flags(s0, s1, spad, spad)
     return (si0, si1, sj0, sj1, f0_, f1_, labels)
 
@@ -63,14 +63,14 @@ if __name__ == "__main__":
     glove = emb.GloVe(N=300)  # XXX: hardcoded
 
     print('Preprocessing train file')
-    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(trainf, vocab, emb)
+    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(trainf, vocab, glove)
     pickle.dump((si0, si1, sj0, sj1, f0_, f1_, labels), open(dumptrainf, "wb"))
 
     print('Preprocessing validation file')
-    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(valf, vocab, emb)
+    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(valf, vocab, glove)
     pickle.dump((si0, si1, sj0, sj1, f0_, f1_, labels), open(dumpvalf, "wb"))
 
     print('Preprocessing test file')
-    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(testf, vocab,emb)
+    si0, si1, sj0, sj1, f0_, f1_, labels = load_set(testf, vocab, glove)
     pickle.dump((si0, si1, sj0, sj1, f0_, f1_, labels), open(dumptestf, "wb"))
 
