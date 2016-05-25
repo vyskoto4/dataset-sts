@@ -82,10 +82,10 @@ class SnliTask(RTETask):
         k=N
         model.add_node(Lambda(get_H_n, output_shape=(k,)), name='h_n', input=final_outputs[1])
 
-        model.add_node(Lambda(get_Y, output_shape=(L, k)), name='Y', input=final_outputs[0])
+        #model.add_node(Lambda(get_Y, output_shape=(L, k)), name='Y', input=final_outputs[0])
         model.add_node(Dense(k,W_regularizer=l2(0.01)),name='Wh_n', input='h_n')
         model.add_node(RepeatVector(L), name='Wh_n_cross_e', input='Wh_n')
-        model.add_node(TimeDistributedDense(k,W_regularizer=l2(0.01)), name='WY', input='Y')
+        model.add_node(TimeDistributedDense(k,W_regularizer=l2(0.01)), name='WY', input=final_outputs[0])
         model.add_node(Activation('tanh'), name='M', inputs=['Wh_n_cross_e', 'WY'], merge_mode='sum')
         model.add_node(TimeDistributedDense(1,activation='softmax'), name='alpha', input='M')
         #model.add_node(name='_r', inputs=['Y','alpha'], merge_mode='mul',
