@@ -34,7 +34,7 @@ def default_config(model_config, task_config):
     c['opt'] = 'adam'
     c['fix_layers'] = []  # mainly useful for transfer learning, or 'emb' to fix embeddings
     c['batch_size'] = 160
-    c['nb_epoch'] = 16
+    c['nb_epoch'] = 1
     c['nb_runs'] = 1
     c['epoch_fract'] = 1
 

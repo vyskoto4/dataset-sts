@@ -60,7 +60,7 @@ def embedding(model, glove, vocab, s0pad, s1pad, dropout, dropout_w,
     else:
         N = glove.N
 
-    model.add_shared_node(name='embdrop', inputs=eputs, outputs=['e0', 'e1'],
+    model.add_node(name='embdrop', inputs=eputs,
                           layer=Dropout(dropout, input_shape=(N,)))
 
     return N

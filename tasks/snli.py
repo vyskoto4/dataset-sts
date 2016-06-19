@@ -49,17 +49,17 @@ def get_R(X):
     ans=K.T.batched_dot(tmp,alpha)
     return ans
 
-def rnn_input(self, model, N, spad, dropout=0, dropoutfix_inp=0, dropoutfix_rec=0,
+def rnn_input( model, N, spad, dropout=0, dropoutfix_inp=0, dropoutfix_rec=0,
           sdim=2, rnnact='tanh', rnninit='glorot_uniform',
           input='embdrop'):
         model.add_node(name='forward', input=input,
-                          layer=GRU(input_dim=N, output_dim=int(N*sdim), input_length=2*spad,
+                          layer=GRU(input_dim=N, output_dim=N, input_length=2*spad,
                                     init=rnninit, activation=rnnact,
                                     return_sequences=True,
                                     dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
 
         model.add_node(name='backward', input=input,
-                          layer=GRU(input_dim=N, output_dim=int(N*sdim), input_length=2*spad,
+                          layer=GRU(input_dim=N, output_dim=N, input_length=2*spad,
                                     init=rnninit, activation=rnnact,
                                     return_sequences=True, go_backwards=True,
                                     dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
@@ -100,7 +100,7 @@ class SnliTask(RTETask):
 
         final_outputs=rnn_input(model,N,self.s0pad)
         L=self.s0pad
-        k=2*N
+        k=N
         l2reg=1e-4
         model.add_node(Lambda(get_H_n, output_shape=(k,)), name='h_n', input=final_outputs[1])
         model.add_node(Lambda(get_Y, output_shape=(L, k)), name='Y', input=final_outputs[0])
@@ -129,6 +129,19 @@ class SnliTask(RTETask):
         gr = graph_input_anssel(si0, si1, sj0, sj1, None, None, labels, f0_, f1_)
         return (gr, labels, self.vocab)
 
+
+
+    def eval(self, model):
+        res = []
+        for gr, fname in [(self.gr, self.trainf), (self.grv, self.valf), (self.grt, self.testf)]:
+            if gr is None:
+                res.append(None)
+                continue
+            ypred=[]
+            for ogr in self.sample_pairs(gr, batch_size=10000, shuffle=False, once=True):
+		ypred +=  list(model.predict(ogr)['score'])
+            ypred = np.array(ypred)
+            res.append(ev.eval_rte(ypred, gr['score'], fname))
 
 def task():
     return SnliTask()
