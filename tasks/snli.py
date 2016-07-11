@@ -55,6 +55,17 @@ class SnliTask(RTETask):
         return (gr, labels, self.vocab)
 
     def eval(self, model):
+        res = [None]
+        for gr, fname in [(self.grv, self.valf), (self.grt, self.testf)]:
+            if gr is None:
+                res.append(None)
+                continue
+            ypred = self.predict(model, gr)
+            res.append(ev.eval_rte(ypred, gr['score'], fname))
+        return tuple(res)
+
+    def old_eval(self, model):
+        ## old eval
         res = []
         for gr, fname in [(self.gr, self.trainf), (self.grv, self.valf), (self.grt, self.testf)]:
             if gr is None:
@@ -62,7 +73,7 @@ class SnliTask(RTETask):
                 continue
             ypred=[]
             for ogr in self.sample_pairs(gr, batch_size=10000, shuffle=False, once=True):
-		ypred +=  list(model.predict(ogr)['score'])
+		        ypred +=  list(model.predict(ogr)['score'])
             ypred = np.array(ypred)
             res.append(ev.eval_rte(ypred, gr['score'], fname))
 def task():
