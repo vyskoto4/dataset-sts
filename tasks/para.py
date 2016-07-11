@@ -14,6 +14,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 import numpy as np
 
 import pysts.eval as ev
+from pysts.kerasts.callbacks import ParaCB
 from pysts.kerasts import graph_input_anssel
 import pysts.loader as loader
 import pysts.nlp as nlp
@@ -35,8 +36,11 @@ class ParaphrasingTask(AbstractTask):
         c['loss'] = 'binary_crossentropy'
         c['nb_epoch'] = 32
 
-    def load_set(self, fname):
-        s0, s1, y = loader.load_msrpara(fname)
+    def load_set(self, fname, lists=None):
+        if lists:
+            s0, s1, y = lists
+        else:
+            s0, s1, y = loader.load_msrpara(fname)
 
         if self.vocab is None:
             vocab = Vocabulary(s0 + s1, prune_N=self.c['embprune'], icase=self.c['embicase'])
@@ -65,8 +69,9 @@ class ParaphrasingTask(AbstractTask):
         return model
 
     def fit_callbacks(self, weightsf):
-        return [ModelCheckpoint(weightsf, save_best_only=True),
-                EarlyStopping(patience=3)]
+        return [ParaCB(self, self.grv),
+                ModelCheckpoint(weightsf, save_best_only=True, monitor='acc', mode='max'),
+                EarlyStopping(monitor='acc', mode='max', patience=3)]
 
     def eval(self, model):
         res = []

@@ -27,9 +27,11 @@ not imply MLP input by itself, contrary to other tasks).
 from __future__ import division
 from __future__ import print_function
 
+import csv
 import numpy as np
 import pickle
 import random
+import re
 import traceback
 
 import keras.preprocessing.sequence as prep
@@ -52,7 +54,7 @@ from .anssel import AnsSelTask
 
 class Container:
     """Container for merging question's sentences together."""
-    def __init__(self, q_text, s0, s1, si0, si1, sj0, sj1, f0, f1, y, qid, fx):
+    def __init__(self, q_text, s0, s1, si0, si1, sj0, sj1, f0, f1, y, qid, xc, xr, fx):
         self.q_text = q_text  # str of question
         self.s0 = s0
         self.s1 = s1
@@ -64,6 +66,8 @@ class Container:
         self.f1 = f1
         self.y = y
         self.qid = qid
+        self.xc = xc
+        self.xr = xr
         # fx is a dict of "extra" features
         # TODO: Make this whole thing a dict that self-describes the
         # required transformations
@@ -75,6 +79,7 @@ class HypEvTask(AbstractTask):
         self.name = 'hypev'
         self.emb = None
         self.vocab = None
+        self.gr = None
 
         # Prescore individual htext,mtext pairs using anssel model.
         self.prescoring_task = AnsSelTask
@@ -85,6 +90,8 @@ class HypEvTask(AbstractTask):
         c['max_sentences'] = 50
         c['class_mode'] = 'scoreS1'
         c['rel_mode'] = 'scoreS2'
+        c['aux_c'] = False
+        c['aux_r'] = False
         c['spad'] = 60
         c['embdim'] = 50
         c['embicase'] = True
@@ -107,7 +114,7 @@ class HypEvTask(AbstractTask):
         # which question classes of mctest to load
         c['mcqtypes'] = ['one', 'multiple']
 
-    def load_set(self, fname, cache_dir=None):
+    def load_set(self, fname, cache_dir=None, lists=None):
         # TODO: Make the cache-handling generic,
         # and offer a way to actually pass cache_dir
         save_cache = False
@@ -122,11 +129,24 @@ class HypEvTask(AbstractTask):
             except (IOError, TypeError, KeyError):
                 save_cache = True
 
-        if '/mc' in fname:
-            s0, s1, y, qids, types = loader.load_mctest(fname)
+        if lists is not None:
+            s0, s1, y, qids, xtra, types = lists
         else:
-            s0, s1, y, qids = loader.load_hypev(fname)
-            types = None
+            xtra = None
+            if '/mc' in fname:
+                s0, s1, y, qids, types = loader.load_mctest(fname)
+            else:
+                s0, s1, y, qids = loader.load_hypev(fname)
+                try:
+                    dsfile = re.sub('\.([^.]*)$', '_aux.tsv', fname)  # train.tsv -> train_aux.tsv
+                    with open(dsfile) as f:
+                        rows = csv.DictReader(f, delimiter='\t')
+                        xtra = loader.load_hypev_xtra(rows)
+                        print(dsfile + ' loaded and available')
+                except Exception as e:
+                    if self.c['aux_r'] or self.c['aux_c']:
+                        raise e
+                types = None
 
         if self.vocab is None:
             vocab = Vocabulary(s0 + s1, prune_N=self.c['embprune'], icase=self.c['embicase'])
@@ -147,6 +167,9 @@ class HypEvTask(AbstractTask):
         gr = graph_input_anssel(si0, si1, sj0, sj1, None, None, y, f0, f1, s0, s1)
         if qids is not None:
             gr['qids'] = qids
+        if xtra is not None:
+            gr['#'] = xtra['#']
+            gr['@'] = xtra['@']
         gr, y = self.merge_questions(gr)
         if save_cache:
             with open(cache_filename, "wb") as f:
@@ -167,6 +190,9 @@ class HypEvTask(AbstractTask):
                 for i in ids:
                     sl = slice(i * batch_size, (i+1) * batch_size)
                     ogr = graph_input_slice(gr, sl)
+                    # s0, s1 are larger than the rest, unnerving keras
+                    ogr.pop('s0', None)
+                    ogr.pop('s1', None)
                     ogr['se03d'] = self.emb.map_jset(ogr['sj03d'])
                     ogr['se13d'] = self.emb.map_jset(ogr['sj13d'])
                     # print(sl)
@@ -178,15 +204,21 @@ class HypEvTask(AbstractTask):
         except Exception:
             traceback.print_exc()
 
-    def build_model(self, module_prep_model, do_compile=True):
+    def build_model(self, module_prep_model, do_compile=True, classrel_outputs=False):
+        xcdim = len(loader.hypev_xtra_c) if self.c['aux_c'] else None
+        xrdim = len(loader.hypev_xtra_r) if self.c['aux_r'] else None
 
-        model = build_model(self.emb, self.vocab, module_prep_model, self.c)
+        model = build_model(self.emb, self.vocab, module_prep_model, self.c, xcdim, xrdim, classrel_outputs)
 
         for lname in self.c['fix_layers']:
             model.nodes[lname].trainable = False
 
         if do_compile:
-            model.compile(loss={'score': self.c['loss']}, optimizer=self.c['opt'])
+            xloss = {}
+            if classrel_outputs:
+                xloss['class'] = self.c['loss']
+                xloss['rel'] = self.c['loss']
+            model.compile(loss=dict(score=self.c['loss'], **xloss), optimizer=self.c['opt'])
         return model
 
     def fit_callbacks(self, weightsf):
@@ -241,10 +273,12 @@ class HypEvTask(AbstractTask):
                                   gr['sj0'][i:i_], gr['sj1'][i:i_],
                                   gr['f0'][i:i_], gr['f1'][i:i_], gr['score'][i],
                                   gr['qids'][i] if 'qids' in gr else None,
+                                  gr['#'][i:i_] if '#' in gr else None,
+                                  gr['@'][i:i_] if '@' in gr else None,
                                   dict([(k, gr[k][i:i_]) for k in self.c.get('f_add', [])]))
             containers.append(container)
 
-        si03d, si13d, sj03d, sj13d, f04d, f14d, mask = [], [], [], [], [], [], []
+        si03d, si13d, sj03d, sj13d, f04d, f14d, xc3d, xr3d, mask = [], [], [], [], [], [], [], [], []
         gr_extra = dict()
         for k in self.c.get('f_add', []):
             gr_extra[k] = []
@@ -273,6 +307,15 @@ class HypEvTask(AbstractTask):
             f04d.append(f0)
             f14d.append(f1)
 
+            if c.xc is not None:
+                #print(c.xc, c.xc.T.shape)
+                xc = prep.pad_sequences(c.xc.T, maxlen=self.c['max_sentences'],
+                                        padding='post', truncating='post').T
+                xr = prep.pad_sequences(c.xr.T, maxlen=self.c['max_sentences'],
+                                        padding='post', truncating='post').T
+                xc3d.append(xc)
+                xr3d.append(xr)
+
             for k in self.c.get('f_add', []):
                 fx = prep.pad_sequences(c.fx[k].T, maxlen=self.c['max_sentences'],
                                         padding='post', truncating='post').T
@@ -289,6 +332,13 @@ class HypEvTask(AbstractTask):
                 'score': y,
                 's0': gr['s0'], 's1': gr['s1']}
         gr3d['c'] = containers
+
+        if self.c['aux_c']:
+            gr3d['xc3d'] = np.array(xc3d)
+            #print(gr3d['xc3d'].shape, gr3d['si03d'].shape)
+        if self.c['aux_r']:
+            gr3d['xr3d'] = np.array(xr3d)
+            #print(gr3d['xr3d'].shape)
 
         if 'qids' in gr and gr['qids'] is not None:
             gr3d['qids'] = [c.qid for c in containers]
@@ -338,7 +388,7 @@ def _prep_model(model, glove, vocab, module_prep_model, c, oact, s0pad, s1pad, r
             model.add_node(name='scoreS2', input=next_input, layer=Activation(oact))
 
 
-def build_model(glove, vocab, module_prep_model, c):
+def build_model(glove, vocab, module_prep_model, c, xcdim=None, xrdim=None, classrel_outputs=False):
     s0pad = s1pad = c['spad']
     max_sentences = c['max_sentences']
     rnn_dim = 1
@@ -375,18 +425,36 @@ def build_model(glove, vocab, module_prep_model, c):
         model.add_node(Reshape_((max_sentences, rnn_dim)), 'sts_in1', input=c['class_mode'])
     if c['rel_mode']:
         model.add_node(Reshape_((max_sentences, rnn_dim)), 'sts_in2', input=c['rel_mode'])
+    c_full = 'sts_in1'
+    r_full = 'sts_in2'
+
+    # ===================== append auxiliary features
+    if xcdim is not None:
+        if c['class_mode']:
+            model.add_input('xc3d', (max_sentences, xcdim))
+            model.add_node(Activation('linear'), 'c_full', inputs=[c_full, 'xc3d'], merge_mode='concat', concat_axis=-1)
+            c_full = 'c_full'
+    if xrdim is not None:
+        if c['rel_mode']:
+            model.add_input('xr3d', (max_sentences, xrdim))
+            model.add_node(Activation('linear'), 'r_full', inputs=[r_full, 'xr3d'], merge_mode='concat', concat_axis=-1)
+            r_full = 'r_full'
 
     # ===================== [w_full_dim, q_full_dim] -> [class, rel]
     if c['class_mode']:
         model.add_node(TimeDistributedDense(1, activation='sigmoid',
                                             W_regularizer=l2(c['l2reg']),
                                             b_regularizer=l2(c['l2reg'])),
-                       'c', input='sts_in1')
+                       'c', input=c_full)
+        if classrel_outputs:
+            model.add_output(name='class', input='c')
     if c['rel_mode']:
         model.add_node(TimeDistributedDense(1, activation='sigmoid',
                                             W_regularizer=l2(c['l2reg']),
                                             b_regularizer=l2(c['l2reg'])),
-                       'r', input='sts_in2')
+                       'r', input=r_full)
+        if classrel_outputs:
+            model.add_output(name='rel', input='r')
 
     #model.add_node(SumMask(), 'mask', input='si03d')  # XXX: needs to take se03d into account too
     # ===================== mean of class over rel
