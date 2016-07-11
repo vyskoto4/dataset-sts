@@ -19,7 +19,7 @@ def default_config(model_config, task_config):
     c['embdim'] = 300
     c['embprune'] = 100
     c['embicase'] = False
-    c['inp_e_dropout'] = 1/2
+    c['inp_e_dropout'] = 0
     c['inp_w_dropout'] = 0
     c['e_add_flags'] = True
 

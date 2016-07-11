@@ -60,7 +60,7 @@ def embedding(model, glove, vocab, s0pad, s1pad, dropout, dropout_w,
     else:
         N = glove.N
 
-    model.add_node(name='embdrop', inputs=eputs,
+    model.add_shared_node(name='embdrop', inputs=eputs, outputs=['e0', 'e1'],
                           layer=Dropout(dropout, input_shape=(N,)))
 
     return N
@@ -91,12 +91,28 @@ def rnn_input(model, N, spad, dropout=3/4, dropoutfix_inp=0, dropoutfix_rec=0,
         model.add_node(name=pfx+'L%de1s_j'%(i,), inputs=[inputs[1], pfx+'L%de1s_'%(i,)], merge_mode='concat', layer=Activation('linear'))
         deep_inputs = ['L%de0s_j'%(i,), 'L%de1s_j'%(i,)]
 
+    if rnnbidi:
+        if rnnbidi_mode == 'concat':
+            sdim /= 2
+        model.add_shared_node(name=pfx+'rnnf', inputs=deep_inputs, outputs=[pfx+'e0sf', pfx+'e1sf'],
+                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+                                        init=rnninit, activation=rnnact,
+                                        return_sequences=return_sequences,
+                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
+        model.add_shared_node(name=pfx+'rnnb', inputs=deep_inputs, outputs=[pfx+'e0sb', pfx+'e1sb'],
+                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+                                        init=rnninit, activation=rnnact,
+                                        return_sequences=return_sequences, go_backwards=True,
+                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
+        model.add_node(name=pfx+'e0s', inputs=[pfx+'e0sf', pfx+'e0sb'], merge_mode=rnnbidi_mode, layer=Activation('linear'))
+        model.add_node(name=pfx+'e1s', inputs=[pfx+'e1sf', pfx+'e1sb'], merge_mode=rnnbidi_mode, layer=Activation('linear'))
 
-    model.add_shared_node(name=pfx+'rnn', inputs=deep_inputs, outputs=[pfx+'e0s', pfx+'e1s'],
-                          layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
-                                    init=rnninit, activation=rnnact,
-                                    return_sequences=return_sequences,
-                                    dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
+    else:
+        model.add_shared_node(name=pfx+'rnn', inputs=deep_inputs, outputs=[pfx+'e0s', pfx+'e1s'],
+                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+                                        init=rnninit, activation=rnnact,
+                                        return_sequences=return_sequences,
+                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec))
 
     model.add_shared_node(name=pfx+'rnndrop', inputs=[pfx+'e0s', pfx+'e1s'], outputs=[pfx+'e0s_', pfx+'e1s_'],
                           layer=Dropout(dropout, input_shape=(spad, int(N*sdim)) if return_sequences else (int(N*sdim),)))
