@@ -31,6 +31,7 @@ from .rte import RTETask
 
 class SnliTask(RTETask):
     def __init__(self):
+	super(self.__class__, self).__init__()
         self.name = 'snli'
         self.spad = 60
         self.s0pad = self.spad
@@ -54,27 +55,5 @@ class SnliTask(RTETask):
         gr = graph_input_anssel(si0, si1, sj0, sj1, None, None, labels, f0_, f1_)
         return (gr, labels, self.vocab)
 
-    def eval(self, model):
-        res = [None]
-        for gr, fname in [(self.grv, self.valf), (self.grt, self.testf)]:
-            if gr is None:
-                res.append(None)
-                continue
-            ypred = self.predict(model, gr)
-            res.append(ev.eval_rte(ypred, gr['score'], fname))
-        return tuple(res)
-
-    def old_eval(self, model):
-        ## old eval
-        res = []
-        for gr, fname in [(self.gr, self.trainf), (self.grv, self.valf), (self.grt, self.testf)]:
-            if gr is None:
-                res.append(None)
-                continue
-            ypred=[]
-            for ogr in self.sample_pairs(gr, batch_size=10000, shuffle=False, once=True):
-		        ypred +=  list(model.predict(ogr)['score'])
-            ypred = np.array(ypred)
-            res.append(ev.eval_rte(ypred, gr['score'], fname))
 def task():
     return SnliTask()

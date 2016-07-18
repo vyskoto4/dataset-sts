@@ -34,6 +34,7 @@ class RTETask(AbstractTask):
         self.s1pad = self.spad
         self.emb = None
         self.vocab = None
+	self.add_output_layers=False
 
     def config(self, c):
         c['loss'] = 'categorical_crossentropy'
@@ -77,16 +78,18 @@ class RTETask(AbstractTask):
         if ptscorer == B.mlp_ptscorer:
             kwargs['sum_mode'] = self.c['mlpsum']
 
-        model.add_node(name='scoreS0', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out0", **kwargs),
-                       layer=Activation('sigmoid'))
-        model.add_node(name='scoreS1', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out1", **kwargs),
-                       layer=Activation('sigmoid'))
-        model.add_node(name='scoreS2', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out2", **kwargs),
-                       layer=Activation('sigmoid'))
-
-        model.add_node(name='scoreV', inputs=['scoreS0', 'scoreS1', 'scoreS2'], merge_mode='concat', layer=Activation('softmax'))
-        model.add_output(name='score', input='scoreV')
-        return model
+	if self.add_output_layers:
+        	model.add_node(name='scoreS0', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out0", **kwargs),
+                	       	layer=Activation('sigmoid'))
+        	model.add_node(name='scoreS1', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out1", **kwargs),
+                	      	layer=Activation('sigmoid'))
+        	model.add_node(name='scoreS2', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out2", **kwargs),
+                		layer=Activation('sigmoid'))
+		model.add_node(name='scoreV', inputs=['scoreS0', 'scoreS1', 'scoreS2'], merge_mode='concat', layer=Activation('softmax'))
+                model.add_output(name='score', input='scoreV')
+	else:
+		model.add_output(name='score',input=final_outputs[0])
+	return model
 
     def build_model(self, module_prep_model, do_compile=True):
         if self.c['ptscorer'] is None:
@@ -114,7 +117,10 @@ class RTETask(AbstractTask):
             if gr is None:
                 res.append(None)
                 continue
-            ypred = model.predict(gr)['score']
+	    ypred=[]
+            for ogr in self.sample_pairs(gr, batch_size=len(gr), shuffle=False, once=True):
+                ypred +=  list(model.predict(ogr)['score'])
+            ypred = np.array(ypred)
             res.append(ev.eval_rte(ypred, gr['score'], fname))
         return tuple(res)
 
