@@ -117,6 +117,29 @@ def rnn_input(model, N, spad, dropout=3/4, dropoutfix_inp=0, dropoutfix_rec=0,
     model.add_shared_node(name=pfx+'rnndrop', inputs=[pfx+'e0s', pfx+'e1s'], outputs=[pfx+'e0s_', pfx+'e1s_'],
                           layer=Dropout(dropout, input_shape=(spad, int(N*sdim)) if return_sequences else (int(N*sdim),)))
 
+def prep_to_n_kwargs(inputs, extra_inp):
+    kwargs = {}
+    inputs = list(inputs)
+    if len(inputs)+len(extra_inp)==1:
+       if len(inputs)>len(extra_inp):
+          kwargs['input']=inputs[0]
+       else:
+          kwargs['input']=inputs[0]
+    else:
+       kwargs['inputs']=inputs+extra_inp
+       kwargs['merge_mode']='sum'
+    return kwargs
+
+def to_n_ptscorer(model, inputs, Ddim, N, l2reg, pfx='out', extra_inp=[], output_dim=1):
+    kwargs = prep_to_n_kwargs(inputs, extra_inp)
+    model.add_node(Activation('tanh'), name=pfx+'to_n_sum', **kwargs)
+    model.add_node(Dense(output_dim=output_dim,activation='softmax',W_regularizer=l2(l2reg)), name=pfx+'to_n_out', input=pfx+'to_n_sum')
+    return (pfx+"to_n_out")
+
+def to_n_simple_ptscorer(model, inputs, Ddim, N, l2reg, pfx='out', extra_inp=[], output_dim=1):
+    kwargs = prep_to_n_kwargs(inputs, extra_inp)
+    model.add_node(Dense(output_dim=output_dim,activation='linear',W_regularizer=l2(l2reg)), name=pfx+'_to_n_out', **kwargs)
+    return pfx+'_to_n_out'
 
 def add_multi_node(model, name, inputs, outputs, layer_class,
         layer_args, siamese=True, **kwargs):
