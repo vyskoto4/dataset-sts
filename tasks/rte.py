@@ -79,11 +79,11 @@ class RTETask(AbstractTask):
             kwargs['Dinit'] = self.c['Dinit']
 
         model.add_node(name='scoreS0', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out0", **kwargs),
-                       layer=Activation('sigmoid'))
+                       layer=Activation('linear'))
         model.add_node(name='scoreS1', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out1", **kwargs),
-                       layer=Activation('sigmoid'))
+                       layer=Activation('linear'))
         model.add_node(name='scoreS2', input=ptscorer(model, final_outputs, self.c['Ddim'], N, self.c['l2reg'], pfx="out2", **kwargs),
-                       layer=Activation('sigmoid'))
+                       layer=Activation('linear'))
 
         model.add_node(name='scoreV', inputs=['scoreS0', 'scoreS1', 'scoreS2'], merge_mode='concat', layer=Activation('softmax'))
         model.add_output(name='score', input='scoreV')
