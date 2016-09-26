@@ -87,83 +87,78 @@ def rnn_input(model, N, spad, dropout=3/4, dropoutfix_inp=0, dropoutfix_rec=0,
         rnn_input(model, N, spad, dropout=0, sdim=sdim, rnnbidi=rnnbidi, return_sequences=True,
                   rnn=rnn, rnnact=rnnact, rnninit=rnninit, rnnbidi_mode=rnnbidi_mode,
                   rnnlevels=1, inputs=deep_inputs, pfx=pfx+'L%d'%(i,))
-        
-        model.add_node(name=pfx+'L%de0s_j'%(i,), inputs=[inputs[0], pfx+'L%de0s_'%(i,)], merge_mode='concat', layer=Activation('linear'))
-        model.add_node(name=pfx+'L%de1s_j'%(i,), inputs=[inputs[1], pfx+'L%de1s_'%(i,)], merge_mode='concat', layer=Activation('linear'))
-        deep_inputs = ['L%de0s_j'%(i,), 'L%de1s_j'%(i,)]
-
+        if len(deep_inputs)>1 or rnnbidi:
+            model.add_node(name=pfx+'L%de0s_j'%(i,), inputs=[inputs[0], pfx+'L%de0s_'%(i,)], merge_mode='concat', layer=Activation('linear'))
+            model.add_node(name=pfx+'L%de1s_j'%(i,), inputs=[inputs[1], pfx+'L%de1s_'%(i,)], merge_mode='concat', layer=Activation('linear'))
+            deep_inputs = ['L%de0s_j'%(i,), 'L%de1s_j'%(i,)]
+        else:  
+            model.add_node(name=pfx+'L%de0s_j'%(i,), inputs=[inputs[0], pfx+'L%d'%(i,)], merge_mode='concat', layer=Activation('linear'))
+            
     if rnnbidi:
         if rnnbidi_mode == 'concat':
             sdim /= 2
+        rnnf_args={}
+        rnnb_args={}
         rnnfa_args={}
         rnnba_args={}
+        func = model.add_shared_node
         if len(deep_inputs)>1:
-           model.add_shared_node(name=pfx+'rnnf', inputs = deep_inputs, outputs = [pfx+'e%dsf'%(i) for i in range(len(deep_inputs))], 
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
-                                        init=rnninit, activation=rnnact,
-                                        return_sequences=return_sequences,
-                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnnf_args)
-           model.add_shared_node(name=pfx+'rnnb', inputs=deep_inputs, outputs=[pfx+'e%dsb'%(i) for i in range(len(deep_inputs))],
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
-                                        init=rnninit, activation=rnnact,
-                                        return_sequences=return_sequences, go_backwards=True,
-                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnnb_args)
+           rnnf_args['inputs']=deep_inputs
+           rnnb_args['inputs']=deep_inputs
+           rnnf_args['outputs']= [pfx+'e%dsf'%(i) for i in range(len(deep_inputs))] 
+           rnnb_args['outputs']= [pfx+'e%dsb'%(i) for i in range(len(deep_inputs))] 
            rnnfa_args['merge_mode']=rnnbidi_mode
            rnnba_args['merge_mode']=rnnbidi_mode
            rnnfa_args['inputs']=[pfx+'e%dsf'%(i) for i in range(len(deep_inputs))]
            rnnba_args['inputs']=[pfx+'e%dsb'%(i) for i in range(len(deep_inputs))]
-
         else:
-           model.add_node(name=pfx+'rnnf', input=deep_inputs[0],
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+           func = model.add_node
+           rnnf_args['input']=deep_inputs[0]
+           rnnb_args['input']=deep_inputs[0]
+           rnnfa_args['input']=pfx+'rnnf'
+           rnnba_args['input']=pfx+'rnnb'
+
+        func(name=pfx+'rnnf', layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
                                         init=rnninit, activation=rnnact,
                                         return_sequences=return_sequences,
-                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnnf_args)
-           model.add_node(name=pfx+'rnnb', deep_inputs[0],
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnnf_args)        
+        func(name=pfx+'rnnb', layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
                                         init=rnninit, activation=rnnact,
                                         return_sequences=return_sequences, go_backwards=True,
                                         dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnnb_args)
-           rnnfa_args['input']=pfx+'rnnf'
-           rnnba_args['input']=pfx+'rnnb'        
         model.add_node(name=pfx+'e0s', layer=Activation('linear'), **rnnfa_args)
         model.add_node(name=pfx+'e1s', layer=Activation('linear'), **rnnba_args)
 
+        model.add_shared_node(name=pfx+'rnndrop', inputs=[pfx+'e0s', pfx+'e1s'], outputs=[pfx+'e0s_', pfx+'e1s_'],
+                          layer=Dropout(dropout, input_shape=(spad, int(N*sdim)) if return_sequences else (int(N*sdim),)))
     else:
         rnns_args = {}
+        rnndrop_args = {}
         if len(deep_inputs)>1:
            rnns_args['inputs']=deep_inputs
            rnns_args['outputs']=[pfx+'e0s', pfx+'e1s']
-        model.add_shared_node(name=pfx+'rnn', inputs]=deep_inputs, outputs=[pfx+'e0s', pfx+'e1s'],
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
-                                        init=rnninit, activation=rnnact,
-                                        return_sequences=return_sequences,
-                                        dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnns_args)        
-       else:
-           model.add_shared_node(name=pfx+'rnn', input=deep_inputs[0],
-                              layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
+           rnndrop_args['inputs'] = rnns_args['outputs']
+           rnndrop_args[outputs] = [s+'_' for s in rnndrop_args['inputs']]
+           func=model.add_shared_node
+        else:
+           rnns_args['input']=deep_inputs[0]
+           rnndrop_args['input'] = pfx+'rnn'
+           func=model.add_node
+        func(name=pfx+'rnn', layer=rnn(input_dim=N, output_dim=int(N*sdim), input_length=spad,
                                         init=rnninit, activation=rnnact,
                                         return_sequences=return_sequences,
                                         dropout_W=dropoutfix_inp, dropout_U=dropoutfix_rec), **rnns_args)
-    rnndrop_args={}
-    if len(deep_inputs)>1:
-       rnndrop_args['inputs']=[pfx+'e0s', pfx+'e1s']
-       rnndrop_args['outputs']=[pfx+'e0s_', pfx+'e1s_']
-    else:
-       rnndrop_args['input']=[pfx+'e0s', pfx+'e1s']
-       rnndrop_args['output']=[pfx+'e0s_']
-       
-    model.add_shared_node(name=pfx+'rnndrop', inputs=[pfx+'e0s', pfx+'e1s'], outputs=[pfx+'e0s_', pfx+'e1s_'],
-                          layer=Dropout(dropout, input_shape=(spad, int(N*sdim)) if return_sequences else (int(N*sdim),)))
+        func(name=pfx+'rnndrop', inputs=[pfx+'e0s', pfx+'e1s'], outputs=[pfx+'e0s_', pfx+'e1s_'],
+                          layer=Dropout(dropout, input_shape=(spad, int(N*sdim)) if return_sequences else (int(N*sdim),)), **rnndrop_args)
 
 def prep_to_n_kwargs(inputs, extra_inp):
     kwargs = {}
     inputs = list(inputs)
     if len(inputs)+len(extra_inp)==1:
        if len(inputs)>len(extra_inp):
-          kwargs['input']=inputs[0]
+          kwargs['input']=inputs
        else:
-          kwargs['input']=inputs[0]
+          kwargs['input']=extra_inp[0]
     else:
        kwargs['inputs']=inputs+extra_inp
        kwargs['merge_mode']='sum'
@@ -173,11 +168,11 @@ def to_n_ptscorer(model, inputs, Ddim, N, l2reg, pfx='out', extra_inp=[], output
     kwargs = prep_to_n_kwargs(inputs, extra_inp)
     model.add_node(Activation('tanh'), name=pfx+'to_n_sum', **kwargs)
     model.add_node(Dense(output_dim=output_dim,activation='softmax',W_regularizer=l2(l2reg)), name=pfx+'to_n_out', input=pfx+'to_n_sum')
-    return (pfx+"to_n_out")
+    return pfx+"to_n_out"
 
 def to_n_simple_ptscorer(model, inputs, Ddim, N, l2reg, pfx='out', extra_inp=[], output_dim=1):
     kwargs = prep_to_n_kwargs(inputs, extra_inp)
-    model.add_node(Dense(output_dim=output_dim,activation='linear',W_regularizer=l2(l2reg)), name=pfx+'_to_n_out', **kwargs)
+    model.add_node(layer=Dense(output_dim=output_dim,activation='linear',W_regularizer=l2(l2reg)), name=pfx+"_to_n_out", **kwargs)
     return pfx+'_to_n_out'
 
 def add_multi_node(model, name, inputs, outputs, layer_class,
