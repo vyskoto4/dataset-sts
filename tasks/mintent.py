@@ -80,44 +80,45 @@ class Mintent(AbstractTask):
             sentence,cls = line[:-1].split(": ")
             if cls not in classes:
                classes[cls]=len(classes.keys())
-            s_split=sentence.split()
-            d[cls].extend(s_split)
+            d[cls].append(sentence.split())
+        
+        sentences = sum(d.values(),[])
+        if len(sentences)%2==1:
+           sentences.append("")
+        
         
        
         self.grt = {
-                     's0': [d[doc] for doc in d],
-                     's1': [[] for doc in d ] ,
-                     'classes': [classes[doc] for doc in d]
+                     's0': sentences[::2],
+                     's1': sentences[1::2] ,
                       # labels : -- not needed for training
                    }
        
         self.d = d
+        print(len(self.grt['s0']))
     def load_grv(self,fname):
         s0=[]
         s1=[]
         labels=[]
-        linenums=[]
+        linenums=[] # linenum is a sentence identifier in eval
         lnum=0    
         for line in open(fname):
             sentence,s_cls = line[:-1].split(": ")
             s_split=sentence.split()
             lnum+=1
-            for cls,wlist in self.d.iteritems():
-                s0.append(s_split)
-                s1.append(wlist)
-                linenums.append(lnum)
-                if cls==s_cls:
-                   labels.append(1)
-                else:
-                   labels.append(0)
-                
+            for cls,slist in self.d.iteritems():
+                for s in slist:
+                    s0.append(s_split)
+                    s1.append(s)
+                    linenums.append(lnum)
+                    labels.append(1 if cls==s_cls else 0)                
         self.grv = {
               'linenums': linenums, 
               's0': s0,
               's1': s1,
               'labels': labels
               } 
-        print(len(self.grv))
+        print(len(self.grv['s0']))
     
     def load_data(self, trainf, valf, testf=None):
         # create trainf valf...
@@ -149,7 +150,7 @@ class Mintent(AbstractTask):
         for i in range(len(self.grv['s0'])):
             res[self.grv['linenums'][i]].append([self.grv['s0'][i],score[i],self.grv['labels'][i]])
           
-        print(res)
+        #print(res)
         for s in res:
             data = res[s]
             data.sort(key= lambda x: x[1], reverse=True)
@@ -157,6 +158,7 @@ class Mintent(AbstractTask):
                print('ok')
             else: 
                print('bad')
+            #print(data[::3])
 
 def task():
     return Mintent()
