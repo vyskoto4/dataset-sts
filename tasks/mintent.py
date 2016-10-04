@@ -12,7 +12,9 @@ import pysts.loader as loader
 from pysts.kerasts import graph_input_slice, graph_input_prune
 import pysts.kerasts.blocks as B
 
+from tasks import AbstractTask
 
+from collections import defaultdict
 def default_config(model_config, task_config):
     # TODO: Move this to AbstractTask()?
     c = dict()
@@ -53,7 +55,9 @@ def default_config(model_config, task_config):
 
 
 class Mintent(AbstractTask):
-    
+
+    def config(self,c):
+        return    
     def set_conf(self, c):
         self.c = c
 
@@ -69,57 +73,61 @@ class Mintent(AbstractTask):
         _, _, self.vocab = self.load_set(vocabf)
         return self.vocab
     
-    def load_grt(fname):
+    def load_grt(self,fname):
         d = defaultdict(list)
         classes={}
-        sentences=[]
         for line in open(fname):
             sentence,cls = line[:-1].split(": ")
             if cls not in classes:
                classes[cls]=len(classes.keys())
             s_split=sentence.split()
-            sentences.append((s_split,classes[cls))
             d[cls].extend(s_split)
         
        
         self.grt = {
-                     's0': [d[doc] for doc in d]
-                     's1': [[] for doc in d ] 
+                     's0': [d[doc] for doc in d],
+                     's1': [[] for doc in d ] ,
                      'classes': [classes[doc] for doc in d]
                       # labels : -- not needed for training
                    }
        
         self.d = d
-    def load_grv(fname)
+    def load_grv(self,fname):
         s0=[]
         s1=[]
         labels=[]
-             
+        linenums=[]
+        lnum=0    
         for line in open(fname):
             sentence,s_cls = line[:-1].split(": ")
             s_split=sentence.split()
-            for cls,wlist in self.d:
+            lnum+=1
+            for cls,wlist in self.d.iteritems():
                 s0.append(s_split)
                 s1.append(wlist)
+                linenums.append(lnum)
                 if cls==s_cls:
                    labels.append(1)
-
+                else:
+                   labels.append(0)
                 
         self.grv = {
+              'linenums': linenums, 
               's0': s0,
               's1': s1,
               'labels': labels
               } 
-        
+        print(len(self.grv))
     
     def load_data(self, trainf, valf, testf=None):
         # create trainf valf...
         self.trainf = trainf
         self.valf = valf
+        print(valf)
         self.testf = testf
-
-        self.gr, self.y, self.vocab = self.load_grt(trainf)
-        self.grv, self.yv, _ = self.load_grv(valf)
+        self.gr={'score':[]}
+        self.load_grt(trainf)
+        self.load_grv(valf)
         #if testf is not None:
         #    self.grt, self.yt, _ = self.load_set(testf)
         #else:
@@ -127,7 +135,7 @@ class Mintent(AbstractTask):
 
 
 
-    def prep_model(self, module_prep_model, oact='sigmoid'):
+    def build_model(self, module_prep_model, oact='sigmoid'):
         # Input embedding and encoding
         return module_prep_model([],self.c)  
 
@@ -137,7 +145,19 @@ class Mintent(AbstractTask):
 
     def eval(self, model):
         score = model.predict(self.grv)['score']
-        res=[] 
-        for i in range(len(self.grv)):
-            res.append(self.grv['s0'][i], self.grv['s1'][i], score[i])
+        res=defaultdict(list)
+        for i in range(len(self.grv['s0'])):
+            res[self.grv['linenums'][i]].append([self.grv['s0'][i],score[i],self.grv['labels'][i]])
+          
         print(res)
+        for s in res:
+            data = res[s]
+            data.sort(key= lambda x: x[1], reverse=True)
+            if data[0][2]==1:
+               print('ok')
+            else: 
+               print('bad')
+
+def task():
+    return Mintent()
+ 
