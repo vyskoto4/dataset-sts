@@ -62,11 +62,10 @@ from keras.optimizers import *
 from pysts.kerasts.objectives import ranknet, ranksvm, cicerons_1504
 import pysts.kerasts.blocks as B
 from tasks import default_config
-
+import mintent_preprocess as mip
 
 def config(model_config, task_config, params):
     c = default_config(model_config, task_config)
-
     for p in params:
         k, v = p.split('=')
         c[k] = eval(v)
@@ -91,9 +90,9 @@ def train_model(runid, model, task, c):
                    batch_size=c['batch_size'], nb_epoch=c['nb_epoch'],
                    **fit_kwargs)
     # model.save_weights('weights-'+runid+'-final.h5', overwrite=True)
-    if c['ptscorer'] is None:
-        model.save_weights('weights-'+runid+'-bestval.h5', overwrite=True)
-    model.load_weights('weights-'+runid+'-bestval.h5')
+    #if c['ptscorer'] is None:
+    #    model.save_weights('weights-'+runid+'-bestval.h5', overwrite=True)
+    #model.load_weights('weights-'+runid+'-bestval.h5')
 
 
 def train_and_eval(runid, module_prep_model, task, c, do_eval=True):
@@ -111,7 +110,7 @@ def train_and_eval(runid, module_prep_model, task, c, do_eval=True):
 
 
 if __name__ == "__main__":
-    modelname, taskname, trainf, valf = sys.argv[1:5]
+    modelname, taskname, dataf= sys.argv[1:5]
     params = sys.argv[5:]
 
     model_module = importlib.import_module('.'+modelname, 'models')
@@ -124,16 +123,17 @@ if __name__ == "__main__":
     if conf['embdim'] is not None:
         print('GloVe')
         task.emb = emb.GloVe(N=conf['embdim'])
-
-    print('Dataset')
-    if 'vocabf' in conf:
-        task.load_vocab(conf['vocabf'])
-    task.load_data(trainf, valf)
-    for i_run in range(conf['nb_runs']):
+    results=[]
+    runs=100
+    for i_run in range(runs):
+        mip.prepare(dataf,'data/mintent/mintent_train.txt','data/mintent/mintent_valf.txt')
+        task.load_data('data/mintent/mintent_train.txt','data/mintent/mintent_valf.txt')
         if conf['nb_runs'] == 1:
             runid = '%s-%s-%x' % (taskname, modelname, h)
         else:
             runid = '%s-%s-%x-%02d' % (taskname, modelname, h, i_run)
-        print('RunID: %s  (%s)' % (runid, ps))
+        #print('RunID: %s  (%s)' % (runid, ps))
 
-        train_and_eval(runid, model_module.prep_model, task, conf)
+        _, res = train_and_eval(runid, model_module.prep_model, task, conf)
+        results.append(res)
+    print("Mean acc %.3f in %d runs" %(np.mean(results),runs))

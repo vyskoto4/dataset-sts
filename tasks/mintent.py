@@ -20,30 +20,6 @@ def default_config(model_config, task_config):
     c = dict()
     c['embdim'] = 300
     c['embprune'] = 100
-    c['embicase'] = False
-    c['inp_e_dropout'] = 0
-    c['inp_w_dropout'] = 0
-    c['e_add_flags'] = True
-
-    c['ptscorer'] = B.mlp_ptscorer
-    c['mlpsum'] = 'sum'
-    c['Ddim'] = 2
-    c['Dinit'] = 'glorot_uniform'
-    c['f_add_kw'] = False
-
-    c['loss'] = 'mse'  # you really want to override this in each task's config()
-    c['balance_class'] = False
-
-    c['opt'] = 'adam'
-    c['fix_layers'] = []  # mainly useful for transfer learning, or 'emb' to fix embeddings
-    c['batch_size'] = 160
-    c['nb_epoch'] = 16
-    c['nb_runs'] = 1
-    c['epoch_fract'] = 1
-
-    c['prescoring'] = None
-    c['prescoring_prune'] = None
-    c['prescoring_input'] = None
 
     task_config(c)
     if c.get('task>model', False):  # task config has higher priority than model
@@ -58,16 +34,6 @@ class Mintent(AbstractTask):
 
     def config(self,c):
         return    
-    def set_conf(self, c):
-        self.c = c
-
-        if 's0pad' in self.c:
-            self.s0pad = self.c['s0pad']
-            self.s1pad = self.c['s1pad']
-        elif 'spad' in self.c:
-            self.spad = self.c['spad']
-            self.s0pad = self.c['spad']
-            self.s1pad = self.c['spad']
 
     def load_vocab(self, vocabf):
         _, _, self.vocab = self.load_set(vocabf)
@@ -95,7 +61,6 @@ class Mintent(AbstractTask):
                    }
        
         self.d = d
-        print(len(self.grt['s0']))
     def load_grv(self,fname):
         s0=[]
         s1=[]
@@ -118,21 +83,15 @@ class Mintent(AbstractTask):
               's1': s1,
               'labels': labels
               } 
-        print(len(self.grv['s0']))
     
     def load_data(self, trainf, valf, testf=None):
         # create trainf valf...
         self.trainf = trainf
         self.valf = valf
-        print(valf)
         self.testf = testf
         self.gr={'score':[]}
         self.load_grt(trainf)
         self.load_grv(valf)
-        #if testf is not None:
-        #    self.grt, self.yt, _ = self.load_set(testf)
-        #else:
-        #    self.grt, self.yt = (None, None)
 
 
 
@@ -149,17 +108,16 @@ class Mintent(AbstractTask):
         res=defaultdict(list)
         for i in range(len(self.grv['s0'])):
             res[self.grv['linenums'][i]].append([self.grv['s0'][i],score[i],self.grv['labels'][i]])
-          
-        #print(res)
+        train_sentences=len(res)
+        cls_correct=0  
         for s in res:
             data = res[s]
             data.sort(key= lambda x: x[1], reverse=True)
             if data[0][2]==1:
-               print('ok')
-            else: 
-               print('bad')
-            #print(data[::3])
-
+               cls_correct+=1
+        acc =cls_correct*1.0/train_sentences
+        print("Accuracy %.3f (%d out of %d correct)"%(acc, cls_correct,train_sentences))
+        return acc
 def task():
     return Mintent()
  
