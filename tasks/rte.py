@@ -62,17 +62,6 @@ class RTETask(AbstractTask):
         # Sentence-aggregate embeddings
         final_outputs = module_prep_model(model, N, self.s0pad, self.s1pad, self.c)
 
-        # Measurement
-
-        if self.c['ptscorer'] == '1':
-            # special scoring mode just based on the answer
-            # (assuming that the question match is carried over to the answer
-            # via attention or another mechanism)
-            ptscorer = B.cat_ptscorer
-            final_outputs = [final_outputs[1]]
-        else:
-            ptscorer = self.c['ptscorer']
-
         kwargs = dict()
         if ptscorer == B.mlp_ptscorer:
             kwargs['sum_mode'] = self.c['mlpsum']

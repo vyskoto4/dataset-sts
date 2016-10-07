@@ -25,9 +25,6 @@ def config(c):
     c['rnnact'] = 'tanh'
     c['rnninit'] = 'glorot_uniform'
     c['sdim'] = 2
-    c['ptscorer']=B.to_n_simple_ptscorer
-
-
 
 
 def get_last_time_dim(X):
